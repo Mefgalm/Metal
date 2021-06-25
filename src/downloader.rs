@@ -1,6 +1,6 @@
+use crate::addons_manager::*;
 use crate::base::*;
 use crate::error::*;
-use crate::addons_manager::GameVersion;
 use futures::future::join_all;
 use regex::Regex;
 use reqwest::Client;
@@ -22,30 +22,6 @@ struct Release {
     assets: Vec<Asset>,
 }
 
-impl From<reqwest::Error> for MetalError {
-    fn from(_error: reqwest::Error) -> Self {
-        MetalError::new("Request failed")
-    }
-}
-
-impl From<serde_json::Error> for MetalError {
-    fn from(error: serde_json::Error) -> Self {
-        MetalError::new(&error.to_string())
-    }
-}
-
-impl From<regex::Error> for MetalError {
-    fn from(error: regex::Error) -> Self {
-        MetalError::new(&error.to_string())
-    }
-}
-
-impl From<io::Error> for MetalError {
-    fn from(error: io::Error) -> Self {
-        MetalError::new(&error.to_string())
-    }
-}
-
 #[derive(Debug)]
 pub struct AssetInfo {
     url: String,
@@ -58,16 +34,16 @@ pub struct AssetInfo {
 fn get_asset_info(repo: &str, url: &str) -> MetalResult<AssetInfo> {
     let caps = Regex::new("download/([^/]+)/(.+)")?
         .captures(url)
-        .ok_or(MetalError::new("Version and filename not found"))?;
+        .ok_or(MetalError::new("Download url is broken"))?;
 
     let version = caps
         .get(1)
-        .ok_or(MetalError::new("Version not found"))?
+        .unwrap()
         .as_str();
 
     let file_name = caps
         .get(2)
-        .ok_or(MetalError::new("Filename not found"))?
+        .unwrap()
         .as_str();
 
     let game_version = if file_name.contains("classic") {
@@ -114,22 +90,13 @@ pub async fn get_assets_urls(
         .collect::<Result<Vec<AssetInfo>, MetalError>>()
 }
 
-fn game_version_to_folder_name(game_version: &GameVersion) -> String {
-    match game_version {
-        GameVersion::Bcc => "bcc",
-        GameVersion::Classic => "classic",
-        GameVersion::Retail => "retail",
-    }
-    .to_owned()
-}
-
 async fn download_file(
     http_client: &Client,
     asset_info: &AssetInfo,
     root_folder: &PathBuf,
 ) -> MetalResult<()> {
     let file_path = Path::new(root_folder)
-        .join(&game_version_to_folder_name(&asset_info.game_version))
+        .join(&asset_info.game_version.to_string())
         .join(&asset_info.repo)
         .join(&asset_info.version)
         .join(&asset_info.file_name);
